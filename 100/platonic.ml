@@ -4,6 +4,7 @@
 
 needs "100/polyhedron.ml";;
 needs "Multivariate/cross.ml";;
+needs "100/cosine.ml";;
 
 prioritize_real();;
 
@@ -1823,52 +1824,6 @@ let PLATONIC_SOLIDS_LIMITS = prove
   ASM_REWRITE_TAC[] THEN CONV_TAC NUM_REDUCE_CONV THEN ASM_ARITH_TAC);;
 
 (* ------------------------------------------------------------------------- *)
-(* If-and-only-if version.                                                   *)
-(* ------------------------------------------------------------------------- *)
-
-let PLATONIC_SOLIDS = prove
- (`!m n.
-   (?p:real^3->bool.
-     polytope p /\ aff_dim p = &3 /\
-     (!f. f face_of p /\ aff_dim(f) = &2
-          ==> CARD {e | e face_of p /\ aff_dim(e) = &1 /\ e SUBSET f} = m) /\
-     (!v. v face_of p /\ aff_dim(v) = &0
-          ==> CARD {e | e face_of p /\ aff_dim(e) = &1 /\ v SUBSET e} = n)) <=>
-     m = 3 /\ n = 3 \/       // Tetrahedron
-     m = 4 /\ n = 3 \/       // Cube
-     m = 3 /\ n = 4 \/       // Octahedron
-     m = 5 /\ n = 3 \/       // Dodecahedron
-     m = 3 /\ n = 5          // Icosahedron`,
-  REPEAT GEN_TAC THEN EQ_TAC THEN
-  REWRITE_TAC[LEFT_IMP_EXISTS_THM; PLATONIC_SOLIDS_LIMITS] THEN
-  STRIP_TAC THENL
-   [EXISTS_TAC `std_tetrahedron` THEN
-    ASM_REWRITE_TAC[TETRAHEDRON_EDGES_PER_VERTEX; TETRAHEDRON_EDGES_PER_FACE;
-                    STD_TETRAHEDRON_FULLDIM] THEN
-    REWRITE_TAC[std_tetrahedron] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
-    REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
-    EXISTS_TAC `std_cube` THEN
-    ASM_REWRITE_TAC[CUBE_EDGES_PER_VERTEX; CUBE_EDGES_PER_FACE;
-                    STD_CUBE_FULLDIM] THEN
-    REWRITE_TAC[std_cube] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
-    REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
-    EXISTS_TAC `std_octahedron` THEN
-    ASM_REWRITE_TAC[OCTAHEDRON_EDGES_PER_VERTEX; OCTAHEDRON_EDGES_PER_FACE;
-                    STD_OCTAHEDRON_FULLDIM] THEN
-    REWRITE_TAC[std_octahedron] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
-    REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
-    EXISTS_TAC `std_dodecahedron` THEN
-    ASM_REWRITE_TAC[DODECAHEDRON_EDGES_PER_VERTEX; DODECAHEDRON_EDGES_PER_FACE;
-                    STD_DODECAHEDRON_FULLDIM] THEN
-    REWRITE_TAC[STD_DODECAHEDRON] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
-    REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
-    EXISTS_TAC `std_icosahedron` THEN
-    ASM_REWRITE_TAC[ICOSAHEDRON_EDGES_PER_VERTEX; ICOSAHEDRON_EDGES_PER_FACE;
-                    STD_ICOSAHEDRON_FULLDIM] THEN
-    REWRITE_TAC[STD_ICOSAHEDRON] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
-    REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY]]);;
-
-(* ------------------------------------------------------------------------- *)
 (* Show that the regular polyhedra do have all edges and faces congruent.    *)
 (* ------------------------------------------------------------------------- *)
 
@@ -2177,3 +2132,232 @@ let ICOSAHEDRON_CONGRUENT_FACETS = prove
            f2 face_of std_icosahedron /\ aff_dim f2 = &2
            ==> f1 congruent f2`,
   CONGRUENT_FACES_TAC ICOSAHEDRON_FACETS);;
+
+let equiangular = new_definition
+ `equiangular (f:real^3->bool) t <=>
+        !e1 e2 v. (e1 face_of f /\ aff_dim e1 = &1) /\
+                  (e2 face_of f /\ aff_dim e2 = &1) /\
+                  ~(e1 = e2) /\ v extreme_point_of e1 /\ v extreme_point_of e2
+                  ==> ?a b. e1 = convex hull {v, a} /\
+                            e2 = convex hull {v, b} /\
+                            angle (a, v, b) = t`;;
+
+let VANGLE_EQ_COS_SAME_DOT = prove
+ (`!x y t.
+      x dot x = y dot y /\ ~(x dot x = &0) /\
+      &0 <= t /\ t <= pi /\
+      x dot y = cos t * (x dot x)
+      ==> vangle x y = t`,
+  REPEAT STRIP_TAC THEN
+  REWRITE_TAC[vangle; vector_norm] THEN
+  ASM_REWRITE_TAC[GSYM DOT_EQ_0] THEN
+  COND_CASES_TAC THENL
+   [ASM_MESON_TAC[]; 
+    ASM_REWRITE_TAC[] THEN
+    REWRITE_TAC[GSYM REAL_POW_2] THEN
+    SIMP_TAC[SQRT_POW_2; DOT_POS_LE] THEN
+    ASM_SIMP_TAC[REAL_FIELD `!x y. ~(y = &0) ==> (x * y) / y = x`] THEN
+    MATCH_MP_TAC ACS_COS THEN
+    ASM_REWRITE_TAC[]]);;
+
+let PI3_BOUNDS = prove
+ (`&0 <= pi / &3 /\ pi / &3 <= pi`,
+  MP_TAC PI_POS THEN REAL_ARITH_TAC);;
+
+let PI2_BOUNDS = prove
+ (`&0 <= pi / &2 /\ pi / &2 <= pi`,
+  MP_TAC PI_POS THEN REAL_ARITH_TAC);;
+
+let PI5_BOUNDS = prove
+ (`&0 <= &3 * pi / &5 /\ &3 * pi / &5 <= pi`,
+  MP_TAC PI_POS THEN REAL_ARITH_TAC);;
+
+let COS_5 = prove
+ (`!x. cos(&5 * x) = &16 * cos(x) pow 5 - &20 * cos(x) pow 3 + &5 * cos(x)`,
+  GEN_TAC THEN
+  REWRITE_TAC[REAL_ARITH `&5 * x = &2 * x + &2 * x + x`] THEN
+  REWRITE_TAC[COS_ADD; SIN_ADD] THEN
+  REWRITE_TAC[COS_DOUBLE_COS; SIN_DOUBLE] THEN
+  MP_TAC(SPEC `x:real` SIN_CIRCLE) THEN 
+  CONV_TAC REAL_RING);;
+
+let COS_3PI5 = prove
+ (`cos(&3 * pi / &5) = &1 / &4 + -- &1 / &4 * sqrt(&5)`,
+  SUBGOAL_THEN `(&4 * cos(&3 * pi / &5) - &1) pow 2 = &5` MP_TAC THENL
+   [SUBGOAL_THEN `cos(&5 * (&3 * pi / &5)) = -- &1` MP_TAC THENL
+     [REWRITE_TAC[REAL_ARITH `&5 * (&3 * pi / &5) = &3 * pi`] THEN
+      REWRITE_TAC[REAL_ARITH `&3 * pi = pi + pi + pi`] THEN
+      REWRITE_TAC[COS_ADD; SIN_ADD; COS_PI; SIN_PI] THEN REAL_ARITH_TAC;
+      ALL_TAC] THEN
+    REWRITE_TAC[COS_5] THEN
+    SUBGOAL_THEN `~(cos(&3 * pi / &5) = -- &1)` MP_TAC THENL
+     [MP_TAC(ISPECL [`&3 * pi / &5`; `pi:real`] COS_MONO_LT) THEN
+      REWRITE_TAC[COS_PI] THEN MP_TAC PI_POS THEN REAL_ARITH_TAC;
+      ALL_TAC] THEN
+    SPEC_TAC(`cos(&3 * pi / &5)`, `c:real`) THEN
+    CONV_TAC REAL_RING;
+    ALL_TAC] THEN
+  SUBGOAL_THEN `!x. x pow 2 = &5 <=> x = sqrt(&5) \/ x = --sqrt(&5)`
+    (fun th -> REWRITE_TAC[th]) THENL
+   [GEN_TAC THEN MP_TAC(SPEC `&5` SQRT_POW_2) THEN
+    REWRITE_TAC[REAL_POS] THEN CONV_TAC REAL_RING;
+    ALL_TAC] THEN
+  SUBGOAL_THEN `cos(&3 * pi / &5) < &0` MP_TAC THENL
+   [MP_TAC(ISPECL [`pi / &2`; `&3 * pi / &5`] COS_MONO_LT) THEN
+    REWRITE_TAC[COS_PI2] THEN MP_TAC PI_POS THEN REAL_ARITH_TAC;
+    ALL_TAC] THEN
+  MP_TAC(SPEC `&5` SQRT_POS_LE) THEN
+  REAL_ARITH_TAC);;
+
+let EQUIANGULAR_FACES_TAC facets bounds cos_thm =
+  REWRITE_TAC[equiangular; angle] THEN
+  GEN_TAC THEN
+  GEN_REWRITE_TAC LAND_CONV [facets] THEN
+  DISCH_THEN(REPEAT_TCL DISJ_CASES_THEN SUBST_ALL_TAC) THEN
+  W(fun (asl,w) -> REWRITE_TAC[COMPUTE_EDGES_CONV(find_term is_setenum w)]) THEN
+  REWRITE_TAC[RIGHT_OR_DISTRIB; LEFT_OR_DISTRIB] THEN
+  REWRITE_TAC[TAUT `(A \/ B ==> C) <=> (A ==> C) /\ (B ==> C)`] THEN
+  REWRITE_TAC[FORALL_AND_THM; IMP_CONJ] THEN
+  REWRITE_TAC[GSYM SEGMENT_CONVEX_HULL; EXTREME_POINT_OF_SEGMENT] THEN
+  REPEAT CONJ_TAC THEN REPEAT GEN_TAC THEN
+  DISCH_THEN SUBST_ALL_TAC THEN DISCH_THEN SUBST_ALL_TAC THEN
+  REWRITE_TAC[SEGMENT_EQ; SET_RULE
+   `{a,b} = {c,d} <=> a = c /\ b = d \/ a = d /\ b = c`] THEN
+  PURE_ONCE_REWRITE_TAC[GSYM VECTOR_SUB_EQ] THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_SUB_CONV) THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_EQ_0_CONV) THEN
+  REWRITE_TAC[] THEN
+  REWRITE_TAC[EXTREME_POINT_OF_SEGMENT] THEN
+  REWRITE_TAC[TAUT `(A \/ B ==> C) <=> (A ==> C) /\ (B ==> C)`] THEN
+  REPEAT CONJ_TAC THEN
+  DISCH_THEN SUBST_ALL_TAC THEN
+  PURE_ONCE_REWRITE_TAC[GSYM VECTOR_SUB_EQ] THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_SUB_CONV) THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_EQ_0_CONV) THEN
+  REWRITE_TAC[] THEN
+  REWRITE_TAC[VECTOR_ARITH `x - a:real^3 = vec 0 <=> a = x`;
+              VECTOR_ARITH `x - a - vec 0:real^3 = vec 0 <=> a = x`] THEN
+  REWRITE_TAC[VECTOR_ARITH `vec 0:real^3 = x <=> x = vec 0`] THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_EQ_0_CONV) THEN
+  REWRITE_TAC[] THEN
+  REWRITE_TAC[GSYM LEFT_AND_EXISTS_THM; GSYM RIGHT_AND_EXISTS_THM] THEN
+  REWRITE_TAC[UNWIND_THM2; UNWIND_THM1; EXISTS_OR_THM] THEN
+  MATCH_MP_TAC VANGLE_EQ_COS_SAME_DOT THEN
+  REWRITE_TAC[bounds; cos_thm] THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_SUB_CONV) THEN
+  CONV_TAC(DEPTH_CONV VECTOR3_DOT_CONV) THEN
+  CONV_TAC(DEPTH_CONV REAL_RAT5_MUL_CONV) THEN
+  CONV_TAC(DEPTH_CONV REAL_RAT5_ADD_CONV) THEN
+  CONV_TAC(DEPTH_CONV REAL_RAT5_SUB_CONV) THEN
+  CONV_TAC(DEPTH_CONV REAL_RAT5_EQ_CONV) THEN
+  REWRITE_TAC[];;
+
+let TETRAHEDRON_EQUIANGULAR = prove
+ (`!f. f face_of std_tetrahedron /\ aff_dim f = &2
+       ==> equiangular f (pi / &3)`,
+  EQUIANGULAR_FACES_TAC TETRAHEDRON_FACETS PI3_BOUNDS COS_PI3);;
+
+let CUBE_EQUIANGULAR = prove
+ (`!f. f face_of std_cube /\ aff_dim f = &2
+       ==> equiangular f (pi / &2)`,
+  EQUIANGULAR_FACES_TAC CUBE_FACETS PI2_BOUNDS COS_PI2);;
+
+let OCTAHEDRON_EQUIANGULAR = prove
+ (`!f. f face_of std_octahedron /\ aff_dim f = &2
+       ==> equiangular f (pi / &3)`,
+  EQUIANGULAR_FACES_TAC OCTAHEDRON_FACETS PI3_BOUNDS COS_PI3);;
+
+let DODECAHEDRON_EQUIANGULAR = prove
+ (`!f. f face_of std_dodecahedron /\ aff_dim f = &2
+       ==> equiangular f (&3 * pi / &5)`,
+  EQUIANGULAR_FACES_TAC DODECAHEDRON_FACETS PI5_BOUNDS COS_3PI5);;
+
+let ICOSAHEDRON_EQUIANGULAR = prove
+ (`!f. f face_of std_icosahedron /\ aff_dim f = &2
+       ==> equiangular f (pi / &3)`,
+  EQUIANGULAR_FACES_TAC ICOSAHEDRON_FACETS PI3_BOUNDS COS_PI3);;
+
+let PLATONIC_SOLIDS_FULL = prove
+ (`!m n.
+   (?p:real^3->bool.
+     polytope p /\ aff_dim p = &3 /\
+     (!f. f face_of p /\ aff_dim(f) = &2
+          ==> CARD {e | e face_of p /\ aff_dim(e) = &1 /\ e SUBSET f} = m) /\
+     (!v. v face_of p /\ aff_dim(v) = &0
+          ==> CARD {e | e face_of p /\ aff_dim(e) = &1 /\ v SUBSET e} = n) /\
+     (!f1 f2. f1 face_of p /\ aff_dim f1 = &2 /\
+              f2 face_of p /\ aff_dim f2 = &2 ==> f1 congruent f2) /\
+     (!e1 e2. e1 face_of p /\ aff_dim e1 = &1 /\
+              e2 face_of p /\ aff_dim e2 = &1 ==> e1 congruent e2) /\
+     (?t. !f. f face_of p /\ aff_dim f = &2 ==> equiangular f t)) <=>
+     m = 3 /\ n = 3 \/       // Tetrahedron
+     m = 4 /\ n = 3 \/       // Cube
+     m = 3 /\ n = 4 \/       // Octahedron
+     m = 5 /\ n = 3 \/       // Dodecahedron
+     m = 3 /\ n = 5`         // Icosahedron,
+  REPEAT GEN_TAC THEN EQ_TAC THENL
+   [DISCH_THEN(X_CHOOSE_THEN `p:real^3->bool` STRIP_ASSUME_TAC) THEN
+    MATCH_MP_TAC PLATONIC_SOLIDS_LIMITS THEN
+    EXISTS_TAC `p:real^3->bool` THEN
+    ASM_REWRITE_TAC[];
+    STRIP_TAC THENL
+     [EXISTS_TAC `std_tetrahedron` THEN
+      ASM_REWRITE_TAC[TETRAHEDRON_EDGES_PER_VERTEX; TETRAHEDRON_EDGES_PER_FACE;
+                      STD_TETRAHEDRON_FULLDIM; TETRAHEDRON_CONGRUENT_EDGES;
+                      TETRAHEDRON_CONGRUENT_FACETS] THEN
+      CONJ_TAC THENL
+       [REWRITE_TAC[std_tetrahedron] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
+        REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
+        EXISTS_TAC `pi / &3` THEN REWRITE_TAC[TETRAHEDRON_EQUIANGULAR]];
+      EXISTS_TAC `std_cube` THEN
+      ASM_REWRITE_TAC[CUBE_EDGES_PER_VERTEX; CUBE_EDGES_PER_FACE;
+                      STD_CUBE_FULLDIM; CUBE_CONGRUENT_EDGES;
+                      CUBE_CONGRUENT_FACETS] THEN
+      CONJ_TAC THENL
+       [REWRITE_TAC[std_cube] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
+        REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
+        EXISTS_TAC `pi / &2` THEN REWRITE_TAC[CUBE_EQUIANGULAR]];
+      EXISTS_TAC `std_octahedron` THEN
+      ASM_REWRITE_TAC[OCTAHEDRON_EDGES_PER_VERTEX; OCTAHEDRON_EDGES_PER_FACE;
+                      STD_OCTAHEDRON_FULLDIM; OCTAHEDRON_CONGRUENT_EDGES;
+                      OCTAHEDRON_CONGRUENT_FACETS] THEN
+      CONJ_TAC THENL
+       [REWRITE_TAC[std_octahedron] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
+        REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
+        EXISTS_TAC `pi / &3` THEN REWRITE_TAC[OCTAHEDRON_EQUIANGULAR]];
+      EXISTS_TAC `std_dodecahedron` THEN
+      ASM_REWRITE_TAC[DODECAHEDRON_EDGES_PER_VERTEX; DODECAHEDRON_EDGES_PER_FACE;
+                      STD_DODECAHEDRON_FULLDIM; DODECAHEDRON_CONGRUENT_EDGES;
+                      DODECAHEDRON_CONGRUENT_FACETS] THEN
+      CONJ_TAC THENL
+       [REWRITE_TAC[STD_DODECAHEDRON] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
+        REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
+        EXISTS_TAC `&3 * pi / &5` THEN REWRITE_TAC[DODECAHEDRON_EQUIANGULAR]];
+      EXISTS_TAC `std_icosahedron` THEN
+      ASM_REWRITE_TAC[ICOSAHEDRON_EDGES_PER_VERTEX; ICOSAHEDRON_EDGES_PER_FACE;
+                      STD_ICOSAHEDRON_FULLDIM; ICOSAHEDRON_CONGRUENT_EDGES;
+                      ICOSAHEDRON_CONGRUENT_FACETS] THEN
+      CONJ_TAC THENL
+       [REWRITE_TAC[STD_ICOSAHEDRON] THEN MATCH_MP_TAC POLYTOPE_CONVEX_HULL THEN
+        REWRITE_TAC[FINITE_INSERT; FINITE_EMPTY];
+        EXISTS_TAC `pi / &3` THEN REWRITE_TAC[ICOSAHEDRON_EQUIANGULAR]]]]);;
+
+let PLATONIC_SOLIDS = prove
+ (`!m n.
+   (?p:real^3->bool.
+     polytope p /\ aff_dim p = &3 /\
+     (!f. f face_of p /\ aff_dim(f) = &2
+          ==> CARD {e | e face_of p /\ aff_dim(e) = &1 /\ e SUBSET f} = m) /\
+     (!v. v face_of p /\ aff_dim(v) = &0
+          ==> CARD {e | e face_of p /\ aff_dim(e) = &1 /\ v SUBSET e} = n)) <=>
+     m = 3 /\ n = 3 \/       // Tetrahedron
+     m = 4 /\ n = 3 \/       // Cube
+     m = 3 /\ n = 4 \/       // Octahedron
+     m = 5 /\ n = 3 \/       // Dodecahedron
+     m = 3 /\ n = 5          // Icosahedron`,
+  REPEAT GEN_TAC THEN EQ_TAC THEN
+  REWRITE_TAC[LEFT_IMP_EXISTS_THM; PLATONIC_SOLIDS_LIMITS] THEN
+  REWRITE_TAC[GSYM PLATONIC_SOLIDS_FULL] THEN
+  STRIP_TAC THEN
+  EXISTS_TAC `p:real^3->bool` THEN
+  ASM_REWRITE_TAC[]);;
